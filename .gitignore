@@ -216,3 +216,5 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+data/sst-2_tokenizer/
+data/sst-2/
