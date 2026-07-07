@@ -220,3 +220,4 @@ data/
 model/
 ChatGLM3/
 configs/
+output/

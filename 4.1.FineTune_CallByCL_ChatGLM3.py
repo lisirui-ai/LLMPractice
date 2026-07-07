@@ -583,7 +583,19 @@ def process_batch(
         if tools is not None:  # 工具调用功能尚未实现
             raise NotImplementedError()
 
+        # conv：单个样本的完整多轮对话，类型：list[dict]
+        #       由 batched_conv（即 batch['conversations']）解包而来，
+        #       每个元素是描述一条消息的字典，结构示例：
+        #   [
+        #       {'role': 'system',    'content': '你是一个助手...'},
+        #       {'role': 'user',      'content': '你好'},
+        #       {'role': 'assistant', 'content': '你好！有什么可以帮你的？'},
+        #       ...
+        #   ]
         for message in conv:  # 遍历当前对话中的每条消息
+            # message：单条消息字典，类型：dict
+            #   'role':    str — 消息角色，取值为 'system' / 'user' / 'assistant' / 'tool'
+            #   'content': str — 消息的文本内容
             # 根据角色决定该消息是否参与 loss 计算
             if message['role'] in ('system', 'user'):
                 loss_mask_val = False  # system 和 user 消息不计算 loss（仅作为上下文）
