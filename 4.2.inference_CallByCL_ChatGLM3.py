@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # 标准库导入：面向对象的文件系统路径操作类，支持路径拼接、解析和判断等
 from pathlib import Path
 # 类型注解相关：Annotated 用于为参数附加 CLI 帮助元数据，Union 表示多类型联合
