@@ -96,25 +96,45 @@ def load_model_and_tokenizer(model_dir: Union[str, Path]) -> tuple[ModelType, To
 def main(
         model_dir: Annotated[str, typer.Argument(help='模型目录路径，支持标准预训练模型和 PEFT 微调后的模型（含 adapter_config.json）')],
         prompt: Annotated[str, typer.Option(help='输入给模型的文本提示（prompt），模型将基于此生成一次对话回复')],
+        temperature: Annotated[float, typer.Option(help='采样温度，范围 (0, 1]，值越低输出越确定，值越高输出越随机')] = 0.8,
+        top_p: Annotated[float, typer.Option(help='核采样概率阈值，范围 (0, 1]，仅从累积概率前 top_p 的 token 中采样')] = 0.8,
+        max_length: Annotated[int, typer.Option(help='生成序列的最大总 token 数（含输入），超出后截断输出')] = 8192,
 ):
     """
-    主推理函数：加载指定模型，对输入的 prompt 执行一次对话推理并打印生成结果。
+    主推理函数：加载指定模型，对输入的 prompt 执行一次流式对话推理并打印生成结果。
 
     参数：
         model_dir (str): 模型目录路径（命令行位置参数），支持标准模型或微调后的 PEFT 模型
         prompt (str): 用户输入的提示文本（命令行选项 --prompt），模型将基于此生成回复
+        temperature (float): 采样温度，默认 0.8；越低越保守，越高越随机
+        top_p (float): 核采样阈值，默认 0.8；控制候选词的概率质量覆盖范围
+        max_length (int): 生成序列最大总 token 数（输入 + 输出），默认 8192；
+                          使用 ChatGLM3 原生参数，避免与内部 max_length 冲突
     """
     # 根据模型目录自动加载模型和分词器，自动检测是否为 PEFT 微调模型
     # model 类型：ModelType，tokenizer 类型：TokenizerType
     model, tokenizer = load_model_and_tokenizer(model_dir)
-    # 调用 ChatGLM3 模型的 chat 方法进行单轮对话推理
-    # chat 方法返回 tuple[str, list]：
-    #   - 第一个元素 response 为生成的回复文本，类型：str
+    # 调用 ChatGLM3 模型的 stream_chat 方法进行单轮流式对话推理
+    # stream_chat 返回一个生成器（Generator），每次 yield 一个 tuple[str, list]：
+    #   - 第一个元素 response 为截至当前 step 已生成的完整回复文本，类型：str
     #   - 第二个元素为对话历史列表，此处用 _ 忽略（单轮推理不需要历史）
-    response, _ = model.chat(tokenizer, prompt)
-    # 将模型生成的回复文本打印到标准输出，类型：str
-    print(response)
-
+    # temperature、top_p、max_new_tokens 作为关键字参数透传给底层 generate() 方法
+    # 注意：每次 yield 的 response 是累积文本，需与上一轮对比才能得到新增部分
+    current_length = 0  # 记录上一次已打印的字符数，类型：int，初始为 0
+    for response, _ in model.stream_chat(
+        tokenizer,
+        prompt,
+        temperature=temperature,  # 采样温度，类型：float，控制输出多样性
+        top_p=top_p,              # 核采样阈值，类型：float，过滤低概率 token
+        max_length=max_length,    # 最大总序列长度（输入+输出），类型：int，ChatGLM3 原生参数
+    ):
+        # response[current_length:] 截取本次新生成的增量文本片段，类型：str
+        # print 的 end='' 阻止自动换行，flush=True 立即刷新缓冲区以实现实时输出
+        print(response[current_length:], end='', flush=True)
+        # 更新已打印长度为当前累积文本的总长度，类型：int
+        current_length = len(response)
+    # 所有 token 输出完毕后打印换行符，使终端光标移至新行
+    print()
 
 if __name__ == '__main__':
     app()  # 启动 typer 命令行应用，解析命令行参数并调用 main 函数

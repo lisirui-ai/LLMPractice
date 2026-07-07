@@ -1,0 +1,95 @@
+# ============================================================
+# LoRA 微调配置文件（autodl-tmp 版本）
+# configs / data / model 三个文件夹已移至 /root/autodl-tmp/ 下
+# 用于 ChatGLM3 等大语言模型的 LoRA 参数高效微调训练
+# ============================================================
+
+# ----- 一、数据集配置 -----
+data_config:
+  train_file: train.json       # 训练集文件名（相对于命令行传入的 data_dir），JSON 格式
+  val_file: dev.json           # 验证集文件名，用于训练过程中评估
+  test_file: dev.json          # 测试集文件名，用于最终评估
+  num_proc: 16                 # 数据预处理时使用的并行进程数，越大预处理越快
+
+# ----- 二、序列长度配置 -----
+max_input_length: 256          # 输入序列的最大 token 长度，超出部分将被截断
+max_output_length: 512         # 输出序列的最大 token 长度，超出部分将被截断
+
+# ----- 三、训练参数配置（对应 transformers.Seq2SeqTrainingArguments）-----
+training_args:
+  # see `transformers.Seq2SeqTrainingArguments`
+  # ★ 修改点：output_dir 由 ./output 改为 autodl-tmp 下的绝对路径，
+  #            确保检查点写入高速 SSD 存储而非系统盘
+  output_dir: /root/autodl-tmp/output   # 模型检查点及训练结果的输出目录
+
+  max_steps: 57000              # 最大训练步数，达到后停止训练（优先级高于 epoch）
+
+  # needed to be fit for the dataset
+  learning_rate: 1e-4          # 初始学习率，适配当前数据集规模，过大易震荡，过小收敛慢
+
+  # settings for data loading
+  per_device_train_batch_size: 4   # 每块 GPU/CPU 的训练批大小（即每个 step 每卡处理的样本数）
+                                    # 全局 batch size = per_device_train_batch_size × GPU 卡数 × gradient_accumulation_steps
+                                    # 84GB 显存（A100/H100）下 ChatGLM3-6B + LoRA 模型本体约 12GB，剩余空间充裕
+                                    # 显存不足时可减小此值，同时增大 gradient_accumulation_steps 以保持等效全局 batch size
+  # gradient_accumulation_steps: 1  # 梯度累积步数（默认 1），每隔 N 步才真正更新一次参数
+                                    # 可在单卡/小显存场景下模拟更大的全局 batch size
+  dataloader_num_workers: 16        # DataLoader 加载数据的子进程数，加速数据读取
+  remove_unused_columns: false      # 是否自动删除模型 forward() 不使用的列，false 保留所有列
+
+  # settings for saving checkpoints
+  save_strategy: steps         # 检查点保存策略，"steps" 表示按步数保存
+  save_steps: 500              # 每隔 500 步保存一次检查点
+
+  # settings for logging
+  log_level: info              # 日志级别，info 输出常规训练信息
+  logging_strategy: steps      # 日志记录策略，"steps" 表示按步数记录
+  logging_steps: 10            # 每隔 10 步记录一次训练日志（loss、lr 等）
+
+  # settings for evaluation
+  per_device_eval_batch_size: 4    # 每块 GPU/CPU 的评估批大小；84GB 显存下可设较大值
+                                    # 评估时 predict_with_generate=true 使用 generate() 生成，显存占用高于训练
+                                    # 因此设为训练批大小的一半（32/2=16），留出生成阶段的额外显存余量
+  evaluation_strategy: steps        # 评估策略，"steps" 表示按步数触发评估
+  eval_steps: 500                   # 每隔 500 步进行一次验证集评估
+
+  # settings for early stopping
+  load_best_model_at_end: true      # 训练结束后自动加载验证集上表现最佳的检查点（早停的前提条件）
+                                    # 要求 save_strategy 与 evaluation_strategy 保持一致（均为 steps）
+  metric_for_best_model: rouge-l    # 监控的评估指标名称，与 compute_metrics 返回的 key 对应
+                                    # 可选：rouge-1、rouge-2、rouge-l、bleu-4、eval_loss 等
+  greater_is_better: true           # 该指标是否越大越好；rouge-l 越大越好为 true
+                                    # 若改用 eval_loss 作为监控指标，则需改为 false
+
+  # settings for lr scheduler
+  lr_scheduler_type: cosine     # 学习率调度器类型：余弦退火，学习率从初始值平滑衰减到接近 0
+                                # 相比 linear（默认），cosine 在训练末期衰减更缓慢，有助于精细收敛
+                                # 可选值：linear / cosine / cosine_with_restarts / constant / constant_with_warmup
+  warmup_ratio: 0.05            # 预热阶段占总训练步数的比例：0.05 × 3000 = 前 150 步线性升温
+                                # 预热期内学习率从 0 线性增长到 learning_rate（5e-5），之后开始余弦衰减
+                                # 防止训练初期学习率过大导致参数剧烈震荡
+
+  # settings for optimizer
+  # adam_epsilon: 1e-6              # Adam 优化器的 epsilon 参数，防止除零，默认 1e-8（可按需开启）
+  # uncomment the following line to detect nan or inf values
+  # debug: underflow_overflow       # 调试模式，开启后可检测前向/反向传播中的 NaN 或 Inf 值
+
+  predict_with_generate: true       # 评估时使用 generate() 生成文本，而非 logits，适用于生成式任务
+
+  # see `transformers.GenerationConfig`
+  generation_config:
+    max_new_tokens: 512             # 推理/评估时最多生成的新 token 数量
+
+  # set your absolute deepspeed path here
+  #deepspeed: ds_zero_2.json        # DeepSpeed Zero-2 配置文件路径（多卡/大模型训练时开启）
+
+  # set to true if train with cpu.
+  use_cpu: false                    # 是否使用 CPU 训练，false 表示使用 GPU；无 GPU 时设为 true
+
+# ----- 四、PEFT / LoRA 适配器配置 -----
+peft_config:
+  peft_type: LORA                   # PEFT 方法类型，LORA 即低秩适配（Low-Rank Adaptation）
+  task_type: CAUSAL_LM              # 任务类型，CAUSAL_LM 表示因果语言模型（自回归生成）
+  r: 16                              # LoRA 秩（rank），控制低秩矩阵的维度，越大参数量越多，表达能力越强
+  lora_alpha: 32                    # LoRA 缩放系数，实际缩放比例为 lora_alpha / r = 4.0
+  lora_dropout: 0.1                 # LoRA 层的 Dropout 概率，用于正则化，防止过拟合

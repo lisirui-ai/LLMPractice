@@ -41,6 +41,7 @@ from torch import nn
 from transformers import (
     AutoModelForCausalLM,         # 自动识别并加载因果语言模型（如 GPT、ChatGLM）的类
     AutoTokenizer,                # 自动识别并加载对应分词器的类
+    EarlyStoppingCallback,        # 早停回调：连续 N 次评估无改善时提前终止训练
     EvalPrediction,               # 封装评估预测结果的数据类（含 predictions 和 label_ids）
     GenerationConfig,             # 文本生成配置类，控制生成长度、采样策略等行为
     PreTrainedModel,              # 预训练模型基类，定义通用接口
@@ -988,6 +989,16 @@ def main(
         eval_dataset=val_dataset.select(list(range(50))),  # 仅取前 50 条验证样本，加速评估
         tokenizer=tokenizer if use_tokenizer else None,    # LoRA 模式下不传分词器
         compute_metrics=functools.partial(compute_metrics, tokenizer=tokenizer),  # 绑定分词器
+        callbacks=[
+            # 早停回调：连续 3 次评估（即 3 × eval_steps = 1500 步）监控指标无改善则停止训练
+            # early_stopping_patience：触发停止所需的连续无改善评估次数，类型：int
+            # early_stopping_threshold：指标提升幅度需超过该值才算"有改善"，类型：float
+            #   设为 0.0 表示只要严格大于历史最佳即算改善，防止阈值过松导致过早停止
+            EarlyStoppingCallback(
+                early_stopping_patience=5,    # 连续 3 次评估（1500 步）无改善则停止
+                early_stopping_threshold=0.0, # 严格大于历史最佳才算改善
+            )
+        ],
     )
 
     if auto_resume_from_checkpoint.upper() == "" or auto_resume_from_checkpoint is None:
