@@ -49,7 +49,7 @@ training_args:
   # settings for evaluation
   per_device_eval_batch_size: 4    # 每块 GPU/CPU 的评估批大小；84GB 显存下可设较大值
                                     # 评估时 predict_with_generate=true 使用 generate() 生成，显存占用高于训练
-                                    # 因此设为训练批大小的一半（32/2=16），留出生成阶段的额外显存余量
+                                    # 因此设为与训练批大小相同（4），留出生成阶段的额外显存余量
   evaluation_strategy: steps        # 评估策略，"steps" 表示按步数触发评估
   eval_steps: 500                   # 每隔 500 步进行一次验证集评估
 
@@ -65,8 +65,8 @@ training_args:
   lr_scheduler_type: cosine     # 学习率调度器类型：余弦退火，学习率从初始值平滑衰减到接近 0
                                 # 相比 linear（默认），cosine 在训练末期衰减更缓慢，有助于精细收敛
                                 # 可选值：linear / cosine / cosine_with_restarts / constant / constant_with_warmup
-  warmup_ratio: 0.05            # 预热阶段占总训练步数的比例：0.05 × 3000 = 前 150 步线性升温
-                                # 预热期内学习率从 0 线性增长到 learning_rate（5e-5），之后开始余弦衰减
+  warmup_ratio: 0.05            # 预热阶段占总训练步数的比例：0.05 × 57000 = 前 2850 步线性升温
+                                # 预热期内学习率从 0 线性增长到 learning_rate（1e-4），之后开始余弦衰减
                                 # 防止训练初期学习率过大导致参数剧烈震荡
 
   # settings for optimizer
@@ -91,5 +91,11 @@ peft_config:
   peft_type: LORA                   # PEFT 方法类型，LORA 即低秩适配（Low-Rank Adaptation）
   task_type: CAUSAL_LM              # 任务类型，CAUSAL_LM 表示因果语言模型（自回归生成）
   r: 16                              # LoRA 秩（rank），控制低秩矩阵的维度，越大参数量越多，表达能力越强
-  lora_alpha: 32                    # LoRA 缩放系数，实际缩放比例为 lora_alpha / r = 4.0
+  lora_alpha: 32                    # LoRA 缩放系数，实际缩放比例为 lora_alpha / r = 2.0
   lora_dropout: 0.1                 # LoRA 层的 Dropout 概率，用于正则化，防止过拟合
+  target_modules:                   # 指定将 LoRA 低秩矩阵注入到哪些线性层（模块名需与模型权重中的名称完全匹配）
+    - query_key_value               # ChatGLM3 将 Q/K/V 三个投影合并为一个线性层，名称为 query_key_value
+    # - dense                       # Attention 输出投影层（即 o_proj），可选，注入后增加可训练参数量
+    # - dense_h_to_4h               # FFN 第一层（升维，hidden → 4*hidden），可选
+    # - dense_4h_to_h               # FFN 第二层（降维，4*hidden → hidden），可选
+    # ↑ 仅注入 query_key_value 是最轻量的配置；如显存充足可逐步取消注释以增强拟合能力
