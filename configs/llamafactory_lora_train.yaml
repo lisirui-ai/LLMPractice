@@ -237,7 +237,24 @@ eval_steps: 500                   # 建议与 save_steps 保持一致
 per_device_eval_batch_size: 2     # 评估时无需梯度，通常可设得比训练大；受显存限制时与训练相同
 
 # 训练结束后是否加载验证集上表现最好的检查点（需要 eval_strategy != no）
-load_best_model_at_end: true     # true 时会保留最优检查点；需要更多磁盘空间
+# 注意：早停（early_stopping_patience）要求此项必须为 true
+load_best_model_at_end: true      # true 时会保留最优检查点；需要更多磁盘空间
+
+# ── 早停配置（Early Stopping）────────────────────────────────────────────────
+# 前置依赖（三者必须同时满足，否则早停不生效）：
+#   1. load_best_model_at_end: true
+#   2. eval_strategy != no（本配置为 steps，已满足）
+#   3. save_strategy 与 eval_strategy 保持一致（均为 steps，已满足）
+#
+# 早停容忍轮次：连续 N 次评估指标没有改善时，提前终止训练
+# 监控的指标：predict_with_generate=false 时监控 eval_loss（越小越好）
+#             predict_with_generate=true  时监控 rouge-l（越大越好）
+# 示例：eval_steps=500，patience=3 → 连续 1500 步无改善则停止
+early_stopping_patience: 5       # 建议值 3~10；越小越激进，越大越保守
+
+# 早停最小改善阈值：指标变化量小于此值时不计为"改善"（过滤掉微小波动）
+# 例如 eval_loss 从 0.700 降到 0.6995（变化 0.0005 < 0.001），不算改善
+early_stopping_threshold: 0.0    # 0.0 表示只要有任何改善就重置计数器；可设为 0.001
 
 # 评估时是否调用 model.generate() 真实生成文本（而非直接用 logits 计算 loss）
 #
