@@ -1,0 +1,308 @@
+# ============================================================
+# LLaMA Factory LoRA 微调配置文件
+# 调用方式：llamafactory-cli train configs/llamafactory_lora_train.yaml
+# 覆盖范围：模型、数据、LoRA、训练、评估、量化、生成等全部常用配置
+# 官方文档：https://llamafactory.readthedocs.io
+# ============================================================
+
+
+# ================================================================
+# 一、模型配置
+# ================================================================
+
+# 基础模型路径，支持 HuggingFace Hub ID（如 "meta-llama/Llama-2-7b-hf"）或本地绝对路径
+model_name_or_path: /path/to/your/base/model
+
+# 是否信任模型仓库中的远程自定义代码（如 ChatGLM、Qwen 等非标准模型必须设为 true）
+trust_remote_code: true
+
+# 模型权重/tokenizer 缓存目录，为空时使用 HuggingFace 默认缓存路径（~/.cache/huggingface）
+# cache_dir: /path/to/cache
+
+# 模型精度类型：bf16 在 Ampere（A100/3090）及以上显卡推荐使用，fp16 在旧卡上使用
+# 注意：量化（quantization_bit）开启时此选项仍然控制计算精度
+bf16: true                        # 使用 bfloat16 混合精度训练（与 fp16 二选一）
+# fp16: false                     # 使用 float16 混合精度训练
+
+# 是否开启 Flash Attention 2 加速注意力计算（需要安装 flash-attn 包，显著减少显存占用）
+# 支持的模型：LLaMA、Mistral、Qwen2 等；不支持的模型设为 false
+flash_attn: fa2                   # 可选值：off / sdpa / fa2
+
+# 是否开启 rope_scaling 以支持超出预训练长度的上下文（如将 4K 模型扩展到 8K/32K）
+# rope_scaling: dynamic           # 可选值：linear / dynamic（dynamic 效果更好，但稍慢）
+
+
+# ================================================================
+# 二、量化配置（QLoRA 场景开启，普通 LoRA 保持注释）
+# ================================================================
+
+# 量化位宽：4 表示 4-bit QLoRA，8 表示 8-bit 量化，不填则不量化（全精度 LoRA）
+# quantization_bit: 4             # 4-bit 量化可大幅降低显存（7B 模型约 5GB），但训练略慢
+
+# 量化方法：bitsandbytes（bnb）或 hqq，bnb 更通用，hqq 在某些硬件上更快
+# quantization_method: bitsandbytes
+
+# 双量化（Double Quantization）：对量化常数再次量化，进一步节省约 0.4 bit/参数
+# double_quantization: true
+
+# 量化数据类型：nf4 在 4-bit 精度下效果最优（论文推荐）；fp4 精度较低但速度更快
+# quant_type: nf4                 # 可选值：fp4 / nf4
+
+
+# ================================================================
+# 三、训练阶段与微调方式
+# ================================================================
+
+# 训练阶段：
+#   pt  —— 继续预训练（Continual Pretraining）
+#   sft —— 有监督指令微调（Supervised Fine-Tuning），最常用
+#   rm  —— 奖励模型训练（Reward Modeling）
+#   ppo —— PPO 强化学习（需要先训练好 RM）
+#   dpo —— 直接偏好优化（Direct Preference Optimization）
+#   kto —— KTO 偏好优化（Kahneman-Tversky Optimization）
+stage: sft                        # 本配置使用有监督指令微调
+
+# 是否执行训练流程（true=训练，false=仅评估/推理）
+do_train: true
+
+# 微调方式：
+#   lora   —— LoRA 参数高效微调（推荐，仅训练少量适配器参数）
+#   freeze —— 冻结部分层，只训练顶层
+#   full   —— 全参数微调（需要极大显存）
+finetuning_type: lora             # 本配置使用 LoRA 方式
+
+
+# ================================================================
+# 四、数据集配置
+# ================================================================
+
+# 使用的数据集名称，多个数据集用逗号分隔（名称需在 dataset_dir 下的 dataset_info.json 中注册）
+# 内置数据集参考：https://github.com/hiyouga/LLaMA-Factory/blob/main/data/README.md
+dataset: alpaca_en                # 示例：使用内置英文 Alpaca 数据集；可改为自定义数据集名
+
+# 数据集信息配置文件（dataset_info.json）所在目录
+dataset_dir: ./data               # 相对于运行命令的工作目录；自定义数据集需在此目录注册
+
+# 对话模板名称，决定 system/user/assistant 的格式化方式，需与模型预训练时使用的模板一致
+# 常用模板：llama2 / llama3 / qwen / chatglm3 / mistral / baichuan2 / internlm2 / vicuna
+template: llama3                  # 请根据实际使用的模型修改此项
+
+# 最大输入序列长度（prompt + response 的总 token 数），超出部分将被截断
+cutoff_len: 2048                  # 建议与模型最大位置编码保持一致，显存不足时可减小
+
+# 每个数据集最多使用的样本数量，null 表示使用全部数据（调试时可设为 1000 快速验证）
+max_samples: null                 # 设为整数（如 10000）则只取前 N 条数据
+
+# 是否覆盖已缓存的预处理结果（修改数据集后需设为 true 强制重新处理）
+overwrite_cache: false
+
+# 数据预处理使用的并行进程数，建议设为 CPU 核心数
+preprocessing_num_workers: 16
+
+# 是否将同一批次内多条样本拼接成一条以提高 GPU 利用率（适合短文本数据集）
+packing: false                    # true 时可明显提升训练吞吐量，但可能影响部分评估指标
+
+
+# ================================================================
+# 五、LoRA 适配器配置
+# ================================================================
+
+# LoRA 秩（rank）：低秩矩阵的维度大小
+#   - 越大可训练参数越多，表达能力越强，显存占用也越大
+#   - 常用值：8 / 16 / 32 / 64；一般 16 已足够大多数任务
+lora_rank: 16                     # 控制 LoRA 低秩分解的维度
+
+# LoRA 缩放系数 alpha：实际缩放比 = lora_alpha / lora_rank
+#   - 通常设为 lora_rank 的 1~2 倍，lora_alpha=32 时缩放比=2
+#   - 较大的缩放比会加大 LoRA 更新对原始权重的影响力度
+lora_alpha: 32                    # LoRA 输出的缩放系数
+
+# LoRA 层的 Dropout 概率，用于正则化防止过拟合（数据量少时适当增大）
+lora_dropout: 0.05                # 范围 [0, 1)，0 表示不使用 Dropout
+
+# 注入 LoRA 的目标模块名称（多个用逗号分隔或使用 "all-linear" 注入所有线性层）
+# 常见模型的目标模块：
+#   LLaMA/Qwen2/Mistral：q_proj,v_proj 或 q_proj,k_proj,v_proj,o_proj
+#   ChatGLM3：query_key_value
+#   Baichuan2：W_pack
+# 使用 "all-linear" 可自动覆盖所有线性层，效果通常更好但参数量更多
+lora_target: all-linear           # 推荐：注入全部线性层；或手动指定 "q_proj,v_proj"
+
+# 是否使用 rsLoRA（Rank-Stabilized LoRA）：将缩放比改为 lora_alpha / sqrt(lora_rank)
+# 在较大 rank 时训练更稳定，不影响显存占用
+use_rslora: false                 # true 时启用 rsLoRA 改进的缩放公式
+
+# 需要同步保存完整权重（非 LoRA 低秩形式）的额外模块，通常用于保存 embedding 层
+# 若数据集含有新词汇需要扩充词表，则需要将 embed_tokens 和 lm_head 加入
+# lora_modules_to_save: embed_tokens,lm_head
+
+# LoRA+ 配置：为 LoRA B 矩阵使用更高学习率（loraplus_lr_ratio 倍），通常可提升收敛速度
+# loraplus_lr_ratio: 16.0         # 设置 B 矩阵的学习率倍率，官方建议 8~16
+
+
+# ================================================================
+# 六、输出目录配置
+# ================================================================
+
+# 训练结果（检查点、日志、最终模型）的保存根目录
+output_dir: ./output/lora_sft     # 建议按任务命名子目录，便于管理多个实验
+
+# 是否覆盖已存在的输出目录（断点续训时设为 false，全新训练设为 true）
+overwrite_output_dir: false       # false 时若目录已存在会报错，true 时直接覆盖
+
+
+# ================================================================
+# 七、核心训练超参数
+# ================================================================
+
+# 训练总轮数（epoch），每轮遍历一次完整数据集
+num_train_epochs: 3.0             # 数据量少时可增大（如 5~10），数据量大时减小（如 1~3）
+
+# 最大训练步数，设置后会覆盖 num_train_epochs（二选一，通常使用 epoch）
+# max_steps: -1                   # -1 表示由 num_train_epochs 决定步数
+
+# 每块 GPU 上的训练批大小（单卡实际每步处理的样本数）
+per_device_train_batch_size: 2    # 显存不足时减小此值，用 gradient_accumulation_steps 补偿
+
+# 梯度累积步数：每隔 N 步才真正更新一次参数
+# 等效全局批大小 = per_device_train_batch_size × GPU 卡数 × gradient_accumulation_steps
+gradient_accumulation_steps: 8   # 示例：2张卡 × 2 × 8 = 32 的等效全局批大小
+
+# 初始学习率（AdamW 优化器）
+# LoRA 微调常用范围：1e-5 ~ 5e-4；数据量大时取较小值，数据量小时可适当增大
+learning_rate: 1.0e-4             # 科学计数法，等价于 0.0001
+
+# 学习率调度器类型
+# 常用值：cosine（余弦退火，推荐）/ linear / constant / cosine_with_restarts
+lr_scheduler_type: cosine         # 余弦退火：从 learning_rate 平滑衰减到接近 0
+
+# 学习率预热比例（占总训练步数的比例，预热期内学习率从 0 线性增长到 learning_rate）
+warmup_ratio: 0.05                # 0.05 表示前 5% 的步数用于预热，防止训练初期震荡
+
+# 梯度裁剪阈值，防止梯度爆炸（超过阈值时将梯度缩放到该范围内）
+max_grad_norm: 1.0                # 标准值 1.0；不稳定时可减小到 0.5
+
+# 优化器类型
+# adamw_torch：标准 PyTorch AdamW（推荐）
+# adamw_8bit：bitsandbytes 8-bit AdamW，显著减少优化器状态显存（约节省 75%）
+# paged_adamw_32bit / paged_adamw_8bit：QLoRA 论文推荐，支持显存分页
+optim: adamw_torch                # 显存紧张时改为 adamw_8bit 或 paged_adamw_8bit
+
+# AdamW 的权重衰减系数（L2 正则化），防止过拟合
+weight_decay: 0.0                 # 0.0 表示不使用权重衰减；可设为 0.01~0.1
+
+# Adam 优化器 beta 参数：(beta1, beta2)
+# beta1 控制一阶矩估计的衰减率，beta2 控制二阶矩估计的衰减率
+adam_beta1: 0.9                   # 默认值，通常无需修改
+adam_beta2: 0.999                 # 默认值，QLoRA 论文建议改为 0.95
+
+
+# ================================================================
+# 八、日志与检查点保存配置
+# ================================================================
+
+# 日志记录频率（每隔多少步记录一次 loss / lr / grad_norm 等信息）
+logging_steps: 10                 # 步数越小日志越详细，建议 10~50
+
+# 检查点保存策略：steps（按步数）/ epoch（按轮次）/ no（不保存中间检查点）
+save_strategy: steps              # 按步数定期保存，避免训练意外中断丢失进度
+
+# 每隔多少步保存一次检查点（save_strategy=steps 时生效）
+save_steps: 500                   # 数据量大时可适当增大（如 1000）
+
+# 最多保留的检查点数量，超出后自动删除最旧的（节省磁盘空间）
+save_total_limit: 3               # 3 表示最多保留 3 个检查点 + 最终模型
+
+# 是否在训练结束时保存最终模型（通常需要设为 true）
+save_on_each_node: false          # 多节点训练时是否在每个节点都保存检查点
+
+# 是否绘制并保存训练损失曲线图（保存为 PNG 到 output_dir）
+plot_loss: true                   # 直观展示 train/eval loss 变化趋势
+
+
+# ================================================================
+# 九、验证集与评估配置
+# ================================================================
+
+# 从训练集中划分出的验证集比例（0~1 之间，0 表示不使用验证集）
+val_size: 0.1                     # 0.1 表示取 10% 数据作为验证集
+
+# 评估策略：steps（按步数）/ epoch（按轮次）/ no（不评估）
+eval_strategy: steps              # 建议与 save_strategy 保持一致
+
+# 每隔多少步进行一次验证集评估（eval_strategy=steps 时生效）
+eval_steps: 500                   # 建议与 save_steps 保持一致
+
+# 每块 GPU 上的评估批大小
+per_device_eval_batch_size: 2     # 评估时无需梯度，通常可设得比训练大；受显存限制时与训练相同
+
+# 训练结束后是否加载验证集上表现最好的检查点（需要 eval_strategy != no）
+load_best_model_at_end: true     # true 时会保留最优检查点；需要更多磁盘空间
+
+# 评估时是否调用 model.generate() 真实生成文本（而非直接用 logits 计算 loss）
+#
+# ┌─ false（默认）────────────────────────────────────────────────────────────┐
+# │  直接用模型输出的 logits 与标签对比，计算交叉熵损失                              │
+# │  输出指标：eval_loss（越低越好）                                              │
+# │  特点：速度快，适合日常训练过程中粗略监控模型是否收敛/过拟合                        │
+# └────────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─ true ─────────────────────────────────────────────────────────────────────┐
+# │  调用 model.generate() 逐 token 自回归生成完整文本，再与参考答案对比              │
+# │  输出指标（框架自动计算，无需额外配置）：                                         │
+# │    · rouge-1：单字 n-gram 召回率                                              │
+# │    · rouge-2：双字 n-gram 召回率                                              │
+# │    · rouge-l：最长公共子序列 F1（综合衡量生成质量，最常用）                        │
+# │    · bleu-4 ：4-gram 精确率                                                  │
+# │  结果同时写入 output_dir/all_results.json                                    │
+# │  特点：更贴近模型真实生成效果，但每次评估耗时显著增加                               │
+# │  注意：开启后第十一节的生成参数（temperature / top_p / top_k 等）才会生效          │
+# └────────────────────────────────────────────────────────────────────────────┘
+predict_with_generate: false      # 若需要 ROUGE/BLEU 指标，改为 true 并配置第十一节
+
+
+# ================================================================
+# 十、分布式训练与性能优化
+# ================================================================
+
+# 是否开启梯度检查点（Gradient Checkpointing）：用计算换显存，显著降低显存占用
+# 开启后前向传播不保存中间激活值，反向传播时重新计算，训练速度降低约 20%
+gradient_checkpointing: true      # 显存不足时强烈推荐开启
+
+# DeepSpeed 配置文件路径（多卡/多节点训练时使用，单卡可注释）
+# Zero-2 适合模型参数较大但单卡可放下的场景；Zero-3 适合超大模型跨卡分布
+# deepspeed: configs/ds_zero2.json
+
+# 数据加载子进程数（DataLoader 并行读取文件的进程数）
+dataloader_num_workers: 4         # 建议设为 CPU 核心数的 1/4 ~ 1/2，I/O 密集型时增大
+
+# 是否将数据提前预取到 GPU（减少 CPU->GPU 传输的等待时间）
+dataloader_pin_memory: true       # 有 GPU 时推荐 true，CPU 训练时设为 false
+
+# 随机种子，保证实验可复现性
+seed: 42                          # 固定种子后每次训练结果相同（数据shuffle/权重初始化一致）
+
+# 是否在训练前进行一次完整数据过滤（去掉过长样本），加速训练启动
+# pure_bf16: false                # 不推荐，会禁用混合精度
+
+
+# ================================================================
+# 十一、生成参数配置（SFT 阶段评估时使用）
+# ================================================================
+
+# 以下参数控制评估阶段 generate() 的生成行为（predict_with_generate=true 时生效）
+
+# 评估时最多生成的新 token 数量（不含 prompt 部分）
+# generation_max_new_tokens: 512
+
+# 生成时的温度系数：越高输出越随机，越低越确定（0 为贪心解码）
+# generation_temperature: 0.95
+
+# Top-p（核采样）：只从累积概率超过 p 的最小 token 集合中采样
+# generation_top_p: 0.9
+
+# Top-k 采样：只从概率最高的 k 个 token 中采样
+# generation_top_k: 50
+
+# 重复惩罚系数：>1 时抑制重复生成的 token，防止模型陷入重复循环
+# generation_repetition_penalty: 1.1
