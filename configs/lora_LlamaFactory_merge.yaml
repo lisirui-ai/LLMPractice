@@ -1,0 +1,77 @@
+# ============================================================
+# LLaMA Factory LoRA 权重合并配置文件
+# 调用方式：llamafactory-cli export configs/lora_LlamaFactory_merge.yaml
+# 功能：将 LoRA 低秩适配器权重合并回基础模型，生成可独立部署的完整模型
+# 合并公式：W_merged = W_base + (alpha / rank) × B × A
+# ============================================================
+
+
+# ================================================================
+# 一、模型配置
+# ================================================================
+
+# 基础模型路径，支持 HuggingFace Hub ID 或本地绝对路径
+model_name_or_path: /path/to/your/base/model
+
+# 是否信任模型仓库中的远程自定义代码（ChatGLM、Qwen 等非标准模型必须设为 true）
+trust_remote_code: true
+
+# 合并后权重的保存精度：建议与训练精度一致，避免精度损失
+bf16: true                        # 使用 bfloat16 精度保存合并后权重（与 fp16 二选一）
+# fp16: false                     # 使用 float16 精度保存
+
+
+# ================================================================
+# 二、LoRA 适配器配置
+# ================================================================
+
+# 微调方式：告知框架本次操作涉及 LoRA 适配器
+finetuning_type: lora             # 固定为 lora，不可更改
+
+# LoRA 适配器权重目录（包含 adapter_model.safetensors 和 adapter_config.json）
+# 框架自动从 adapter_config.json 中读取 rank / alpha / target_modules 等信息
+adapter_name_or_path: ./output/lora_sft   # 替换为实际的训练输出目录路径
+
+# 对话模板名称：合并时用于同步复制 tokenizer 相关配置到导出目录
+# 须与训练时保持一致（如 qwen / chatglm3 / llama3 / mistral 等）
+template: llama3                  # 请根据实际使用的模型修改此项
+
+
+# ================================================================
+# 三、导出配置
+# ================================================================
+
+# 合并后完整模型的保存目录（合并完成后可作为标准 HuggingFace 模型直接加载）
+export_dir: ./output/merged_model
+
+# 每个权重分片文件的最大体积（单位：GB）
+# 7B 模型 bf16 约 14GB，设为 2 则拆分为约 7 个分片文件
+export_size: 2                    # 建议值 2~5；单文件上限受文件系统限制（FAT32 最大 4GB）
+
+# 合并运算执行设备：
+#   cuda —— 在 GPU 上执行矩阵合并（速度快，需要足够显存容纳完整模型）
+#   cpu  —— 在 CPU 上执行合并（显存不足时使用，速度较慢，内存需 ≥ 模型大小 × 2）
+export_device: cuda               # 显存不足时改为 cpu
+
+# 是否保存为旧版 PyTorch .bin 格式（不推荐）
+# false（推荐）：保存为 .safetensors 格式，加载更安全、速度更快
+# true：保存为 .bin 格式，兼容旧版本 transformers（< 4.30）
+export_legacy_format: false       # false=safetensors，true=.bin
+
+
+# ================================================================
+# 四、量化导出配置（导出时直接量化，默认关闭）
+# ================================================================
+
+# 导出时是否同步进行量化（生成量化后的完整模型，节省磁盘空间和后续推理显存）
+# 注意：量化导出与 export_device=cuda 配合使用效果最佳
+# export_quantization_bit: 4      # 量化位宽：4 或 8（不填则不量化）
+
+# 量化校准数据集（量化时用于统计权重分布，影响量化精度）
+# export_quantization_dataset: data/my_dataset.json
+
+# 量化校准样本数量（越多越准确，但耗时越长）
+# export_quantization_nsamples: 128
+
+# 量化校准序列最大长度
+# export_quantization_maxlen: 1024
