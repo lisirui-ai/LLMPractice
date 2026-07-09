@@ -142,7 +142,7 @@ use_rslora: false                 # true 时启用 rsLoRA 改进的缩放公式
 # lora_modules_to_save: embed_tokens,lm_head
 
 # LoRA+ 配置：为 LoRA B 矩阵使用更高学习率（loraplus_lr_ratio 倍），通常可提升收敛速度
-# loraplus_lr_ratio: 16.0         # 设置 B 矩阵的学习率倍率，官方建议 8~16
+loraplus_lr_ratio: 14.0         # 设置 B 矩阵的学习率倍率，官方建议 8~16
 
 
 # ================================================================
