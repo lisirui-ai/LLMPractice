@@ -1,0 +1,9 @@
+# 这是运行 DeepSeek V3 模型架构（MLA + MoE + FP8）Notebook 所需的依赖库
+# Python版本：3.14.x
+# 运行环境：NVIDIA L4 GPU（24GB 显存），Colab Pro+ 或 AutoDL
+# 注意：需额外下载 kernel.py（FP8 Triton Kernel）：
+#   !wget https://raw.githubusercontent.com/deepseek-ai/DeepSeek-V3/main/inference/kernel.py
+torch==2.4.1
+triton==3.0.0
+transformers==4.46.3
+safetensors==0.4.5
