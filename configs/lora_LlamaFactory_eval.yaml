@@ -1,0 +1,139 @@
+# ============================================================
+# LLaMA Factory LoRA 基准评估配置文件
+# 调用方式：llamafactory-cli eval configs/lora_LlamaFactory_eval.yaml
+# 适用场景：在多选题基准（MMLU、C-Eval、CMMLU）上评测微调前后的模型效果
+# 官方文档：https://llamafactory.readthedocs.io/en/latest/getting_started/eval.html
+# 参数类：EvaluationArguments（eval 专属）+ ModelArguments + FinetuningArguments
+# ============================================================
+
+
+# ================================================================
+# 一、模型配置（ModelArguments）
+# ================================================================
+
+# 基础模型路径，支持 HuggingFace Hub ID 或本地绝对路径
+# 本地路径需加 . 或 .. 出发，否则框架会尝试从 Hub 下载
+model_name_or_path: /path/to/your/base/model
+
+# 是否信任模型仓库中的远程自定义代码（Qwen、ChatGLM 等非标准模型必须设为 true）
+trust_remote_code: true
+
+# 模型计算精度：bf16 适用于 Ampere（A100/3090）及以上显卡，fp16 适用于旧卡
+bf16: true                        # 使用 bfloat16 精度（与 fp16 二选一）
+# fp16: false                     # 使用 float16 精度
+
+# Flash Attention 2 加速注意力计算（需安装 flash-attn，可降低显存占用和推理耗时）
+flash_attn: disabled              # 可选值：auto / disabled / sdpa / fa2
+
+
+# ================================================================
+# 二、量化配置（可选，评估时量化可降低显存，默认关闭）
+# ================================================================
+
+# 评估时量化位宽：4-bit 可大幅降低显存（7B 模型约从 14GB 降至 5GB），精度略有损失
+# 注意：quantization_bit 仅在 finetuning_type 为 lora 或 oft 时才允许设置
+# quantization_bit: 4             # 可选值：4 / 8；不填则使用全精度
+
+# 量化方法：bitsandbytes（通用）或 hqq（部分硬件更快）
+# quantization_method: bitsandbytes
+
+# 量化数据类型（仅 4-bit 时生效）：nf4 精度更优，fp4 速度更快
+# quantization_type: nf4          # 可选值：nf4 / fp4
+
+
+# ================================================================
+# 三、LoRA 适配器配置（FinetuningArguments）
+# 评估 LoRA 微调后的模型时填写，评估未微调的基础模型时注释掉这两项
+# ================================================================
+
+# 微调方式：告知框架本次评估需要加载 LoRA 适配器
+finetuning_type: lora             # 可选值：lora / freeze / full / oft
+
+# LoRA 适配器权重目录（包含 adapter_model.safetensors 和 adapter_config.json）
+# 框架会自动读取 adapter_config.json 中的 rank/alpha/target_modules 等配置
+adapter_name_or_path: ./output/lora_sft   # 替换为实际的训练输出目录路径
+
+# 若需评估未微调的基础模型，注释掉以上两行即可：
+# finetuning_type: lora
+# adapter_name_or_path: ./output/lora_sft
+
+
+# ================================================================
+# 四、评估任务配置（EvaluationArguments 核心字段）
+# ================================================================
+
+# 评估任务名称（必填）
+# 格式为 {基准名}_{数据集分割}，官方目前支持以下三个合法值：
+#
+#   ceval_validation ── C-Eval 验证集
+#                        中文综合知识基准，52 个学科，13,948 道题
+#                        标准：5-shot，lang=zh
+#
+#   cmmlu_test       ── CMMLU 测试集
+#                        中文多学科语言理解基准，67 个学科，11,528 道题
+#                        标准：5-shot，lang=zh
+#
+#   mmlu_test        ── MMLU 测试集
+#                        英文综合知识基准，57 个学科，14,042 道题，学术界最常用标准基准
+#                        标准：5-shot，lang=en
+#
+# 注意：task 字段值必须是上述三个之一，arc_challenge、hellaswag 等
+#       其他基准名不是合法的 task 值，填写后框架会报错
+task: ceval_validation            # 示例：评测中文综合能力；替换为 mmlu_test 评测英文能力
+
+# 评估数据集的本地目录路径
+# 框架按 task 名称在此目录下查找对应的数据文件
+# 默认值为 "evaluation"（相对于运行命令的工作目录），未下载时框架会尝试自动下载
+# 数据集手动下载方式（以 C-Eval 为例）：
+#   HuggingFace：huggingface-cli download hfl/ceval --local-dir ./evaluation/ceval
+#   ModelScope（国内推荐）：
+#     pip install modelscope
+#     python -c "from modelscope import snapshot_download; snapshot_download('hfl/ceval', cache_dir='./evaluation')"
+task_dir: evaluation              # 默认值；替换为实际数据目录路径
+
+# 评估语言，影响 prompt 的语言（不影响数据集本身）
+#   zh：中文提示词，适合 C-Eval / CMMLU 等中文基准
+#   en：英文提示词，适合 MMLU 等英文基准
+# 语言选择须与 task 匹配，否则准确率会显著下降
+lang: zh                          # 默认值：en；评估中文基准时改为 zh
+
+# Few-shot 示例数量：在 prompt 中附加的示例题目数量，用于上下文学习
+# 各基准论文标准 n-shot：MMLU=5，C-Eval=5，CMMLU=5
+# 设为 0 可测试纯零样本（zero-shot）能力，通常比 5-shot 低 3~8 个百分点
+n_shot: 5                         # 默认值：5；设为 0 测试零样本能力
+
+# 评估时每块 GPU 处理的样本批大小
+# 评估无需梯度反传，通常可设得比训练大；显存不足时减小
+batch_size: 4                     # 默认值：4；显存充裕时可增大到 8 / 16 以加速
+
+# 数据加载器的随机种子，保证每次评估的样本顺序一致，便于结果复现
+seed: 42                          # 默认值：42；通常无需修改
+
+# 评估数据集的下载模式（当 task_dir 中数据不存在时生效）
+#   REUSE_DATASET_IF_EXISTS（默认）：数据集已存在则复用，否则下载
+#   FORCE_REDOWNLOAD：强制重新下载（数据集损坏时使用）
+download_mode: REUSE_DATASET_IF_EXISTS   # 默认值；数据损坏时改为 FORCE_REDOWNLOAD
+
+
+# ================================================================
+# 五、评估模板配置
+# ================================================================
+
+# 评估专用模板（固定填 fewshot，勿改为训练时的对话模板如 llama3/qwen）
+# eval 命令使用独立的多选题评估格式，与训练时的聊天对话模板不同：
+#   训练时 template=llama3 → 格式化为 <|user|>...<|assistant|>... 的对话形式
+#   评估时 template=fewshot → 格式化为 few-shot 多选题形式（Q: ... A/B/C/D）
+template: fewshot                 # 固定值，eval 命令专用，请勿修改
+
+
+# ================================================================
+# 六、输出配置
+# ================================================================
+
+# 评估结果保存目录（必填）
+# 注意：若该目录已存在，框架会直接报错（不会覆盖），请确保每次使用新路径
+#       或在运行前手动删除旧的 save_dir 目录
+# 框架将在此目录下生成：
+#   results.json  ── 每个学科的准确率明细（精确到小数点后 4 位）
+#   summary.json  ── 各大类学科准确率汇总 + 整体平均准确率（average_acc）
+save_dir: ./output/eval_results   # 目录不能已存在；替换为实际的结果保存路径

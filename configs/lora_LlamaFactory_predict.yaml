@@ -1,0 +1,178 @@
+# ============================================================
+# LLaMA Factory LoRA 自定义数据集评估配置文件（NLG Evaluation）
+# 调用方式：llamafactory-cli train configs/lora_LlamaFactory_predict.yaml
+#
+# 适用场景：在【自己的数据集】上评测微调后模型的生成质量（BLEU / ROUGE 指标）
+#
+# 与 llamafactory-cli eval 的核心区别：
+#   llamafactory-cli eval   —— 仅支持内置多选题基准（MMLU / C-Eval / CMMLU），
+#                              输出准确率（Accuracy），不支持自定义数据集
+#   llamafactory-cli train  —— 配合 do_predict: true，支持任意自定义数据集，
+#   （本配置）                  让模型逐条生成答案并与参考答案对比，输出 BLEU / ROUGE
+#
+# 官方文档：https://llamafactory.readthedocs.io/en/latest/getting_started/eval.html
+# ============================================================
+
+
+# ================================================================
+# 一、模型配置（ModelArguments）
+# ================================================================
+
+# 基础模型路径，支持 HuggingFace Hub ID 或本地绝对路径
+model_name_or_path: /path/to/your/base/model
+
+# 是否信任模型仓库中的远程自定义代码（Qwen、ChatGLM 等非标准模型必须设为 true）
+trust_remote_code: true
+
+# 模型计算精度
+bf16: true                        # 使用 bfloat16 精度；旧卡改为 fp16: true
+# fp16: false
+
+# Flash Attention 加速（需安装 flash-attn）
+flash_attn: disabled              # 可选值：auto / disabled / sdpa / fa2
+
+
+# ================================================================
+# 二、量化配置（可选，默认关闭）
+# ================================================================
+
+# 推理预测时如需降低显存可开启量化
+# quantization_bit: 4             # 可选值：4 / 8
+# quantization_method: bitsandbytes
+# quantization_type: nf4          # 可选值：nf4 / fp4
+
+
+# ================================================================
+# 三、训练阶段与微调方式（FinetuningArguments）
+# ================================================================
+
+# 固定为 sft 阶段，do_predict 在 sft 阶段下才能正常触发预测流程
+stage: sft                        # 固定值，不可更改
+
+# 是否执行训练流程：false 表示跳过训练，只做推理预测
+# do_train 默认值为 False，此处显式声明以与训练配置（do_train: true）保持对称，
+# 也避免误读此配置会执行训练
+do_train: false                   # 固定 false，本配置仅用于预测评估，不做任何参数更新
+
+# 关键开关：do_predict=true 触发预测模式（跳过训练，直接对 eval_dataset 做推理）
+do_predict: true                  # 固定 true，这是 NLG 评估的触发参数
+
+# 微调方式：告知框架加载 LoRA 适配器进行评估
+finetuning_type: lora             # 可选值：lora / freeze / full
+
+# LoRA 适配器权重目录（评估基础模型时注释掉此行）
+adapter_name_or_path: ./output/lora_sft   # 替换为实际的训练输出目录路径
+
+
+# ================================================================
+# 四、评估数据集配置（DataArguments）
+# ================================================================
+
+# 用于评估的数据集名称（必填）
+# 须在 dataset_dir 下的 dataset_info.json 中注册，填写键名而非文件名
+# 多个数据集用逗号分隔，框架将它们合并后整体评估
+#
+# ── 关于数据集的选择 ────────────────────────────────────────────────
+# 框架本身不限制填哪个数据集，填训练集键名也不会报错，但有意义的用法如下：
+#
+#   ① 独立测试集（推荐）
+#      从原始数据中在训练前预留 10%~20% 不参与训练，在此处填入其键名
+#      → 测量模型对未见过数据的泛化能力，BLEU/ROUGE 结果有参考价值
+#
+#   ② 与训练集相同的数据集
+#      框架允许，但结果反映的是模型对训练数据的记忆程度（in-sample），
+#      BLEU/ROUGE 会显著偏高，不能代表真实生成质量，仅适合用于调试
+#
+#   ③ 完全独立的新数据（如真实用户问题）
+#      最接近生产环境的评估，结果最有参考价值
+#
+# ── 能否用 dataset + val_size 替代 eval_dataset（避免注册新数据集）？ ─────────────
+# 答：不可以。框架在 parser.py 中有硬性检查：
+#
+#   if predict_with_generate and eval_dataset is None:
+#       raise ValueError("Cannot use `predict_with_generate` if `eval_dataset` is None.")
+#
+# predict_with_generate: true（获取 BLEU/ROUGE）要求 eval_dataset 必须显式指定，
+# val_size 无法绕过这个检查，运行时会直接抛出 ValueError。
+#
+# ── 若原始数据没有独立测试集，推荐两种处理方式 ──────────────────────────────────
+# 方式一：在 dataset_info.json 中将同一 JSON 文件注册两个键名
+#   "my_train":  {"file_name": "my_data.json"}   ← 作为 dataset（训练用）
+#   "my_test":   {"file_name": "my_data.json"}   ← 作为 eval_dataset（评估用，数据有重叠）
+#   说明：框架不会阻止两个键指向同一文件，但这等同于在训练集上评估，结果偏高
+#
+# 方式二（推荐）：在训练完成后，用 Python 从原始数据中切出 10%~20% 保存为新文件，
+#   注册到 dataset_info.json，作为真正的测试集使用，结果才有参考价值
+eval_dataset: my_eval_dataset     # 替换为自己在 dataset_info.json 中注册的【测试集】键名
+
+# 数据集信息配置文件所在目录（dataset_info.json 的位置）
+dataset_dir: ./LlamaFactory/data/ # 替换为实际路径
+
+# 对话模板：须与训练时保持完全一致（注意：不同于 eval 命令的 fewshot 模板）
+# 常用模板：llama2 / llama3 / qwen / chatglm3 / mistral / baichuan2 / internlm2
+template: llama3                  # 请根据实际使用的模型修改此项
+
+# 最大输入序列长度（prompt + response 的总 token 数）
+cutoff_len: 2048                  # 建议与训练时保持一致
+
+# 每个数据集最多使用的样本数（null 表示全部使用，调试时可设为 100）
+max_samples: null                 # 快速验证时改为整数，如 100
+
+# 是否覆盖已缓存的预处理结果（修改数据集内容后设为 true）
+overwrite_cache: false
+
+# 数据预处理进程数
+preprocessing_num_workers: 4
+
+
+# ================================================================
+# 五、输出配置
+# ================================================================
+
+# 预测结果和指标的保存目录
+# 框架将在此目录下生成：
+#   generated_predictions.jsonl  —— 每条样本的模型输出文本（逐行 JSON，可人工审阅）
+#   predict_results.json         —— BLEU-4、ROUGE-1、ROUGE-2、ROUGE-L 汇总得分
+#   all_results.json             —— 包含所有指标的完整结果文件
+output_dir: ./output/predict_results   # 替换为实际的结果保存路径
+
+# 是否覆盖已存在的输出目录（已存在时设为 true，否则报错）
+overwrite_output_dir: true        # 与 llamafactory-cli eval 不同，此处支持覆盖
+
+
+# ================================================================
+# 六、预测（推理）配置
+# ================================================================
+
+# 每块 GPU 上的评估批大小（predict 模式通常需要逐条生成，建议设为 1）
+# 设为 1 可避免因 batch 内 padding 不一致导致的生成质量下降
+per_device_eval_batch_size: 1     # 显存充裕且模型支持 batch 推理时可适当增大
+
+# 关键开关：true 时调用 model.generate() 逐条自回归生成完整文本
+# 设为 true 才会产生 BLEU / ROUGE 指标；设为 false 只计算 eval_loss
+predict_with_generate: true       # 固定 true，NLG 评估必须开启
+
+# 分布式推理超时时间（毫秒），大模型或大数据集时适当增大防止超时
+ddp_timeout: 180000000            # 单位：毫秒，约 50 小时；单卡时此参数不影响
+
+
+# ================================================================
+# 七、生成参数配置（GeneratingArguments）
+# ================================================================
+
+# 最多生成的新 token 数量（不含 prompt 部分）
+# 建议与训练数据中的平均回答长度对齐；过小会截断答案，过大拖慢评估速度
+max_new_tokens: 256               # 根据自己数据集中回答的典型长度调整
+
+# 生成温度：评估时建议设为 0（贪心解码），保证结果确定可复现
+# temperature > 0 会引入随机性，导致不同次运行的 BLEU/ROUGE 分数轻微抖动
+temperature: 0                    # 评估阶段固定 0；推理/部署时改为 0.7~0.9
+
+# Top-p 核采样（temperature=0 时不生效）
+top_p: 0.9
+
+# Top-k 采样（temperature=0 时不生效）
+top_k: 50
+
+# 重复惩罚系数（>1 时抑制重复生成）
+repetition_penalty: 1.1
