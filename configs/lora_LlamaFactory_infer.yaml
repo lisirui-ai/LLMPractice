@@ -15,10 +15,15 @@ model_name_or_path: /path/to/your/base/model
 # 是否信任模型仓库中的远程自定义代码（ChatGLM、Qwen 等非标准模型必须设为 true）
 trust_remote_code: true
 
-# 模型计算精度：bf16 适用于 Ampere（A100/3090）及以上显卡，fp16 适用于旧卡
-# 推理时须与训练时保持相同精度，否则输出质量可能下降
-bf16: true                        # 使用 bfloat16 精度（与 fp16 二选一）
-# fp16: false                     # 使用 float16 精度
+# 推理精度（infer_dtype）：控制模型权重与激活值在推理时的数据类型
+# 注意：bf16 / fp16 是训练专用参数（TrainingArguments），推理流程不解析它们，
+#       写在此处会被框架静默忽略；推理精度须用 infer_dtype 指定
+# 可选值：
+#   auto      —— 默认值，框架根据硬件自动选择（优先 bfloat16，其次 float16，最后 float32）
+#   bfloat16  —— 适用于 Ampere（A100 / 3090）及以上显卡
+#   float16   —— 适用于旧卡（V100 / 2080 等不支持 bfloat16 的硬件）
+#   float32   —— 全精度，显存占用最大，通常仅用于 CPU 推理或调试
+infer_dtype: auto                 # 一般保持 auto 即可，旧卡改为 float16
 
 # Flash Attention 2 加速注意力计算（需安装 flash-attn，显著减少显存占用和推理耗时）
 flash_attn: disabled              # 可选值：auto / disabled / sdpa / fa2；不支持的模型设为 disabled
