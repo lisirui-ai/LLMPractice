@@ -87,22 +87,26 @@ adapter_name_or_path: ./output/lora_sft   # 替换为实际的训练输出目录
 #      最接近生产环境的评估，结果最有参考价值
 #
 # ── 能否用 dataset + val_size 替代 eval_dataset（避免注册新数据集）？ ─────────────
-# 答：不可以。框架在 parser.py 中有硬性检查：
+# 答：可以（v0.8.1+ / PR #4691 修复后）。框架将 parser.py 中的检查改为：
 #
-#   if predict_with_generate and eval_dataset is None:
-#       raise ValueError("Cannot use `predict_with_generate` if `eval_dataset` is None.")
+#   if (do_eval or do_predict or predict_with_generate) and (
+#       eval_dataset is None and val_size < 1e-6          ← 注意是 AND
+#   ):
+#       raise ValueError("Please make sure eval_dataset be provided or val_size >1e-6")
 #
-# predict_with_generate: true（获取 BLEU/ROUGE）要求 eval_dataset 必须显式指定，
-# val_size 无法绕过这个检查，运行时会直接抛出 ValueError。
+# 即 eval_dataset 与 val_size 二选一皆可满足条件：
+#   - 指定 eval_dataset：填写已在 dataset_info.json 注册的测试集键名（本配置使用此方式）
+#   - 指定 val_size：框架自动从 dataset 中随机切出对应比例作为验证集，无需额外注册
+#     示例：dataset: my_data  val_size: 0.1  → 自动取 10% 作为验证集
 #
-# ── 若原始数据没有独立测试集，推荐两种处理方式 ──────────────────────────────────
-# 方式一：在 dataset_info.json 中将同一 JSON 文件注册两个键名
-#   "my_train":  {"file_name": "my_data.json"}   ← 作为 dataset（训练用）
-#   "my_test":   {"file_name": "my_data.json"}   ← 作为 eval_dataset（评估用，数据有重叠）
-#   说明：框架不会阻止两个键指向同一文件，但这等同于在训练集上评估，结果偏高
+# ── 若原始数据没有独立测试集，常见两种处理方式 ──────────────────────────────────
+# 方式一（简便）：使用 val_size 自动切分，无需注册新数据集
+#   dataset: my_data
+#   val_size: 0.1                                         ← 从训练数据中随机切出 10%
+#   说明：切分样本与训练集存在重叠，BLEU/ROUGE 结果偏高，仅适合快速调试
 #
-# 方式二（推荐）：在训练完成后，用 Python 从原始数据中切出 10%~20% 保存为新文件，
-#   注册到 dataset_info.json，作为真正的测试集使用，结果才有参考价值
+# 方式二（推荐）：训练前预留独立测试集，注册到 dataset_info.json 后填入 eval_dataset，
+#   训练集与测试集完全不重叠，BLEU/ROUGE 结果具有真实参考价值
 eval_dataset: my_eval_dataset     # 替换为自己在 dataset_info.json 中注册的【测试集】键名
 
 # 数据集信息配置文件所在目录（dataset_info.json 的位置）
