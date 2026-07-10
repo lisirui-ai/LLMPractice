@@ -3,6 +3,14 @@
 # 调用方式：llamafactory-cli export configs/lora_LlamaFactory_merge.yaml
 # 功能：将 LoRA 低秩适配器权重合并回基础模型，生成可独立部署的完整模型
 # 合并公式：W_merged = W_base + (alpha / rank) × B × A
+#
+# ⚠️  PiSSA 用户必读：
+#   训练配置中使用了 pissa_init: true 且 pissa_iter != -1（快速 SVD 模式）时，
+#   export 命令内部会重新执行一次 SVD 分解来还原残差权重。
+#   若导出时的随机数种子与训练时不一致，SVD 结果将不同，导致合并权重出错，
+#   推理时输出重复无意义内容。
+#   解决办法：确保导出时与训练时使用相同的随机种子（LlamaFactory 默认固定为 42，
+#   只要不手动修改 seed 参数，训练和导出均使用同一默认值，无需额外配置）。
 # ============================================================
 
 
@@ -49,9 +57,10 @@ export_dir: ./output/merged_model
 export_size: 2                    # 建议值 2~5；单文件上限受文件系统限制（FAT32 最大 4GB）
 
 # 合并运算执行设备：
-#   cuda —— 在 GPU 上执行矩阵合并（速度快，需要足够显存容纳完整模型）
-#   cpu  —— 在 CPU 上执行合并（显存不足时使用，速度较慢，内存需 ≥ 模型大小 × 2）
-export_device: cuda               # 显存不足时改为 cpu
+#   auto —— 自动选择（有 GPU 时使用 GPU 加速，速度快；推荐）
+#   cpu  —— 强制在 CPU 上执行（显存不足时使用，速度较慢，内存需 ≥ 模型大小 × 2）
+# 注意：合法值仅为 auto / cpu，不能填 cuda
+export_device: auto               # 显存不足时改为 cpu
 
 # 是否保存为旧版 PyTorch .bin 格式（不推荐）
 # false（推荐）：保存为 .safetensors 格式，加载更安全、速度更快
