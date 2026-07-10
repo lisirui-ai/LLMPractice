@@ -10,7 +10,7 @@
 # 一、模型配置
 # ================================================================
 
-# 基础模型路径，支持 HuggingFace Hub ID（如 "meta-llama/Llama-2-7b-hf"）或本地绝对路径
+# 基础模型路径，支持 HuggingFace Hub ID（如 "meta-llama/Llama-2-7b-hf"）或本地绝对路径（需要加.或..出发，否则会认为是从网页下载）
 # 若使用本地路径，该目录下必须同时包含：
 #   - 模型权重文件：config.json、model.safetensors 或 pytorch_model*.bin 等
 #   - 分词器文件：tokenizer_config.json、tokenizer.json / tokenizer.model、special_tokens_map.json

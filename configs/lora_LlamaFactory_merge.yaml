@@ -18,7 +18,7 @@
 # 一、模型配置
 # ================================================================
 
-# 基础模型路径，支持 HuggingFace Hub ID 或本地绝对路径
+# 基础模型路径，支持 HuggingFace Hub ID 或本地绝对路径（需要加.或..出发，否则会认为是从网页下载）
 model_name_or_path: /path/to/your/base/model
 
 # 是否信任模型仓库中的远程自定义代码（ChatGLM、Qwen 等非标准模型必须设为 true）
