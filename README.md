@@ -1,16 +1,21 @@
-
+<div align="center">
 
 # LLMPractice
 
+<p>
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/PyTorch-2.12.1+cu130-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" />
+  <img src="https://img.shields.io/badge/HuggingFace-Transformers-FFD21E?style=flat-square&logo=huggingface&logoColor=black" />
+  <img src="https://img.shields.io/badge/PEFT-LoRA%20%7C%20Adapter%20%7C%20Prefix-8A2BE2?style=flat-square" />
+  <img src="https://img.shields.io/badge/LlamaFactory-%E2%89%A50.9.0-FF6F00?style=flat-square" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
+</p>
 
+<p>基于 PyTorch + HuggingFace 的大语言模型实战系列</p>
+<p>以 <b>位置编码 → PEFT 方法 → 模型微调 → 架构复现 → 优化器</b> 为主线，循序渐进覆盖 LLM 核心技术栈</p>
+<p>每个 Notebook / 脚本均配有详细中文注释，适合大模型入门与进阶学习</p>
 
-基于 PyTorch + HuggingFace 的大语言模型实战系列
-
-以 **位置编码 → PEFT 方法 → 模型微调 → 架构复现 → 优化器** 为主线，循序渐进覆盖 LLM 核心技术栈
-
-每个 Notebook / 脚本均配有详细中文注释，适合大模型入门与进阶学习
-
-
+</div>
 
 ---
 
