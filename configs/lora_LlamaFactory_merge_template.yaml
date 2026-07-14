@@ -24,9 +24,11 @@ model_name_or_path: /path/to/your/base/model
 # 是否信任模型仓库中的远程自定义代码（ChatGLM、Qwen 等非标准模型必须设为 true）
 trust_remote_code: true
 
-# 合并后权重的保存精度：建议与训练精度一致，避免精度损失
-bf16: true                        # 使用 bfloat16 精度保存合并后权重（与 fp16 二选一）
-# fp16: false                     # 使用 float16 精度保存
+# 模型加载与合并时使用的计算精度（同时决定导出权重的数据类型）
+# 合法值：auto | float16 | bfloat16 | float32
+# 建议与训练时的精度保持一致，避免精度损失
+# ⚠️ bf16 / fp16 是 HuggingFace TrainingArguments 中的训练参数，对 export 命令无效
+infer_dtype: bfloat16             # bfloat16 精度（与训练 bf16: true 对应）；如训练使用 fp16 则改为 float16
 
 
 # ================================================================

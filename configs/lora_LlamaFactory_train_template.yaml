@@ -130,7 +130,30 @@ lora_dropout: 0.05                # 范围 [0, 1)，0 表示不使用 Dropout
 #   LLaMA/Qwen2/Mistral：q_proj,v_proj 或 q_proj,k_proj,v_proj,o_proj
 #   ChatGLM3：query_key_value
 #   Baichuan2：W_pack
-# 使用 "all" 可自动覆盖所有线性层，效果通常更好但参数量更多
+#
+# 【关于 "all" 与灾难性遗忘的说明】
+# "all" 关键字只覆盖 Transformer 中的 nn.Linear 层，具体包括：
+#   Attention：q_proj, k_proj, v_proj, o_proj
+#   FFN：gate_proj, up_proj, down_proj（及 lm_head 等输出投影）
+# 词嵌入层 embed_tokens 是 nn.Embedding，不属于线性层，"all" 不会触碰它。
+# 如需训练 embed_tokens，须显式配置 additional_target（见下方注释行）。
+#
+# LoRA 本身具有天然的抗遗忘机制：原始预训练权重 W₀ 始终被冻结，
+# 推理时权重为 W₀ + BA（低秩增量），预训练知识不会被覆盖。
+#
+# 真正引发灾难性遗忘的常见原因：
+#   1. 学习率过大（learning_rate > 5e-4）导致低秩更新幅度过强
+#   2. 训练轮次过多、数据集单一，导致模型过拟合微调数据
+#   3. lora_alpha / lora_rank 比值过大，缩放倍数失控
+#
+# 选择策略对比：
+#   "all"          → 表达能力强，适合垂直领域深度适配，显存占用略高
+#   "q_proj,v_proj"→ 保守保留通用能力，参数量少，适合强调原始人格/风格的场景
+#
+# 若需保留通用问候/自我介绍等能力，推荐做法：
+#   - 在训练数据中混入 5%~10% 的通用对话数据（如 alpaca、BELLE 通用集）
+#   - 适当降低 lora_alpha（如从 32 改为 16）以减弱更新强度
+#   - lora_target 保持 "all" 即可，无需因遗忘担忧而缩减目标层
 lora_target: all                  # 推荐：注入全部线性层（官方关键字 all）；或手动指定 "q_proj,v_proj"
 
 # 是否使用 rsLoRA（Rank-Stabilized LoRA）：将缩放比改为 lora_alpha / sqrt(lora_rank)
