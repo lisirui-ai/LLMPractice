@@ -70,13 +70,13 @@ LLMPractice/
 ├── 📓 09.ModelArchitecture_DeepSeekV3.2_LightningIndexer+MLA&MoE_FP8&YaRN.ipynb
 ├── 📓 10.ModelArchitecture_AttentionResiduals_FullAttnRes&BlockAttnRes.ipynb
 │
-├── 📂 configs/                        # LlamaFactory YAML 配置模板
-│   ├── lora_LlamaFactory_train_template.yaml
-│   ├── lora_LlamaFactory_infer_template.yaml
-│   ├── lora_LlamaFactory_predict_template.yaml
-│   ├── lora_LlamaFactory_eval_template.yaml
-│   ├── lora_LlamaFactory_merge_template.yaml
-│   └── lora_PEFTFrame_train.yaml
+├── 📂 configs/                        # YAML 配置模板（LlamaFactory 五种流程 + PEFT 框架训练）
+│   ├── lora_LlamaFactory_train_template.yaml   # LlamaFactory LoRA 训练配置模板
+│   ├── lora_LlamaFactory_infer_template.yaml   # LlamaFactory LoRA 推理配置模板
+│   ├── lora_LlamaFactory_predict_template.yaml # LlamaFactory LoRA 测试集预测配置模板
+│   ├── lora_LlamaFactory_eval_template.yaml    # LlamaFactory LoRA 评估配置模板
+│   ├── lora_LlamaFactory_merge_template.yaml   # LlamaFactory LoRA 权重合并配置模板
+│   └── lora_PEFTFrame_train.yaml               # HuggingFace PEFT 框架 LoRA 训练配置（Notebook 04）
 │
 ├── 📂 data/                           # 数据集目录（gitignored）
 │   ├── sst-2/                  # [自动生成] SST-2 数据集（Notebook 02 首次运行自动下载）
