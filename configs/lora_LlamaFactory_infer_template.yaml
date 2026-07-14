@@ -110,17 +110,3 @@ do_sample: true
 
 # 是否在每轮对话后清空历史（true=单轮模式，false=保留多轮上下文）
 # clear_history: false
-
-
-# ================================================================
-# 七、vLLM 加速推理配置（高吞吐生产部署场景，默认关闭）
-# ================================================================
-
-# 使用 vLLM 作为推理后端可大幅提升吞吐量（需安装 vllm 包）
-# 注意：vLLM 暂不支持 LoRA 动态加载，须先合并权重后再使用
-# infer_backend: vllm
-
-# vLLM 引擎参数
-# vllm_maxlen: 4096               # vLLM 支持的最大序列长度（token 数）
-# vllm_gpu_util: 0.9              # GPU 显存利用率上限（0~1），留 0.1 给系统
-# vllm_enforce_eager: false       # false=使用 CUDA graph 加速（推荐）；true=强制 eager 模式（调试用）
