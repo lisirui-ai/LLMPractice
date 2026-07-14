@@ -40,7 +40,7 @@
 | 02  | PEFT 方法对比讲解（无框架手动实现）                                           | 无框架（纯 PyTorch 手写）    | BERT · SST-2 · Frozen · Full FT · BitFit · P-Tuning · Prefix Tuning · P-Tuning v2 · LoRA · Adapter | 八种 PEFT 方法横向对比，参数量 vs. 效果权衡直观展示                    |
 | 03  | ChatGLM3-6B 本地推理                                               | —                    | ChatGLM3-6B · HuggingFace · float16 · 多轮对话                                                         | Colab / 本地 GPU 一键推理，模型结构查看与参数统计                    |
 | 04  | ChatGLM3-6B LoRA 微调（PEFT 框架 & 命令行脚本）                           | **HuggingFace PEFT** | LoRA · `peft` 库 · AdvertiseGen · AutoDL · 命令行调用                                                    | Notebook 04 为主入口，内部通过命令行调用 04.1 微调、04.2 推理    |
-| 05  | LlamaFactory LoRA 全流程向导                                        | **LlamaFactory**     | LlamaFactory · LoRA · Alpaca / ShareGPT 格式 · YAML 配置 · 权重合并                                        | 微调→推理→预测→评估→权重合并完整端到端向导，通用参考手册                     |
+| 05  | LlamaFactory LoRA 全流程向导                                        | **LlamaFactory**     | LlamaFactory · LoRA · Alpaca / ShareGPT 格式 · YAML 配置 · 权重合并 · vLLM 部署                             | 微调→推理→预测→评估→权重合并→vLLM 部署完整端到端向导，通用参考手册               |
 | 06  | LlamaFactory + DeepSeek-R1-Distill-Llama-8B（准备→微调→推理→ROUGE 评估） | **LlamaFactory**     | LlamaFactory · LoRA · DeepSeek-R1-Distill-Llama-8B · ROUGE · StripThink                            | 四子 Notebook 完整链路：数据准备 → LoRA 微调 → 推理对话 → 去思维链评估    |
 | 07  | DeepSeek V3 架构实现（MLA + MoE + FP8）                              | —                    | MLA · MoE · FP8 Block-wise GEMM · YaRN · 分布式张量并行 · 官方 Triton Kernel                                | 从零复现 DeepSeek V3 完整推理架构，调用官方 `kernel.py` 实现 FP8 推理 |
 | 08  | MuonClip 优化器                                                   | —                    | Muon · Nesterov 动量 · QK-Clip · Newton-Schulz 正交化                                                   | 教学简化版 MuonClip，融合 Muon 与 QK-Clip 两项技术              |
@@ -186,7 +186,7 @@ LLMPractice/
 
 > `05.LlamaFactory_LoRA_WorkFlow_Guide.ipynb`
 
-以**命令行示意**为主的综合参考向导，完整覆盖基于 **LlamaFactory 框架**的 LoRA 微调端到端全流程。LlamaFactory 采用 YAML 配置文件 + `llamafactory-cli` 命令行驱动模式，无需编写大量 Python 训练代码，支持数十种主流开源模型与多种微调策略（LoRA / QLoRA / 全量等），适合作为上手实践的一站式参考手册。硬件需求：显存 ≥ 16 GB（7B 模型 + LoRA + bf16），框架版本：LLaMA Factory ≥ 0.9.0。
+以**命令行示意**为主的综合参考向导，完整覆盖基于 **LlamaFactory 框架**的 LoRA 微调端到端全流程，并延伸至 **vLLM 高性能部署**。LlamaFactory 采用 YAML 配置文件 + `llamafactory-cli` 命令行驱动模式，无需编写大量 Python 训练代码，支持数十种主流开源模型与多种微调策略（LoRA / QLoRA / 全量等）；权重合并后可直接交由 vLLM 启动 OpenAI 兼容服务，适合作为上手实践的一站式参考手册。硬件需求：显存 ≥ 16 GB（7B 模型 + LoRA + bf16），框架版本：LLaMA Factory ≥ 0.9.0。
 
 
 | 章节        | 内容                                                                      |
@@ -198,6 +198,7 @@ LLMPractice/
 | 测试集预测     | `llamafactory-cli train`（predict 模式） · 生成 `generated_predictions.jsonl` |
 | ROUGE 评估  | 计算 ROUGE-1 / ROUGE-2 / ROUGE-L                                          |
 | 权重合并      | `llamafactory-cli export` · LoRA 与基座权重合并导出                              |
+| vLLM 部署   | `vllm serve` 启动 OpenAI 兼容服务 · 常用参数说明 · 多卡 / 量化部署 · Python SDK 调用示例    |
 
 
 ---
