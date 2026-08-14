@@ -443,7 +443,7 @@ DeepSeek-R1 系列模型输出含 `<think>...</think>` 思维链标签。本 Not
 **1. 克隆仓库**
 
 ```bash
-git clone https://github.com/your-username/LLMPractice.git
+git clone git@github.com:lisirui-ai/LLMPractice.git
 cd LLMPractice
 ```
 
